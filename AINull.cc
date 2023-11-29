@@ -111,7 +111,7 @@ struct PLAYER_NAME : public Player {
                 int id = cell(pp).id;
                 if (unit(id).type != Pioneer and dist[pp.i][pp.j] < 3) {
                   //danger.push_back(p);
-                  return dodge((k+4)%8, p0);
+                  //return dodge((k+4)%8, p0);
                 }
                 if (unit(id).type == Hellhound and dist[pp.i][pp.j] == 3) {
                   //danger.push_back(p);
