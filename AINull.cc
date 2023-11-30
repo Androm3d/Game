@@ -5,7 +5,7 @@
  * Write the name of your player and save this file
  * with the same name and .cc extension.
  */
-#define PLAYER_NAME Null
+#define PLAYER_NAME SkibbidyToilet
 
 
 struct PLAYER_NAME : public Player {
@@ -27,39 +27,81 @@ struct PLAYER_NAME : public Player {
   typedef vector<vector<int>> VVI;
 
   map<int, int> kind; // For pioneers: 0 -> random, 1 -> cyclic.
+
+  set<Pos> danger;
+
+  struct mine {
+    int id;
+    int priority;
+    Dir next;
+  }
+
+  priority_queue<mine, vector<mine>, Compare> order;
   
   Dir dodge(int d, Pos p) 
   {
     int i = 0;
-    while (cell(p+Dir((d + i)%8)).type != Rock) {
-      i*=-1;
-      if (i < 1) --i;
+    if (p.k == 0) {
+      while (cell(p+Dir((d + i)%8)).type == Rock) {
+        i*=-1;
+        if (i < 1) --i;
+      }
+      return Dir(d + i);
     }
-    return Dir(d + i);
+    else {
+      if (d == 1) return RT;
+      else if (d == 2) {
+        if (random(0, 1)) return RT;
+        else return BR;
+      }
+      else if (d == 3) return BR;
+      else return Right;
+    }
   }
 
-  int BestMove(Pos p)
+  int BestMove(Pos p0)
   {
-    int max = 0;
-    int best = -1;
-    for(int i = 0; i<8; ++i) {
-      Cell c = cell(p + Dir(i));
-      if (c.type != Rock) {
-        if (c.owner != -1) {
-          int points = nb_cells(c.owner) + (30* nb_gems(c.owner));
-          if (points >= max) {
-            best = i;
-            max = points;
+    if (p0.k == 0) {
+      int max = 0;
+      int best = -1;
+      for(int i = 0; i<8; ++i) {
+        Cell c = cell(p0 + Dir(i));
+        if (c.type != Rock and c.id == -1) {
+          if (c.owner != -1) {
+            int points = nb_cells(c.owner) + (30* nb_gems(c.owner));
+            if (points >= max) {
+              best = i;
+              max = points;
+            }
+            else if (best == -1) best = i;
           }
           else if (best == -1) best = i;
         }
-        else if (best == -1) best = i;
+      }
+      return best;
+    }
+    else {
+    queue<Pos> q;
+    q.push(p0);
+    VVI dist(10, vector<int>(10, -1));
+    dist[p0.i][p0.j] = 0;
+    while (not q.empty()) {
+        Pos p = q.front();
+        q.pop();
+        if (dist[p.i][p.j] == 4) return 2;
+        for (int k = 0; k < 8; k = (k+2)%9) {
+            Pos pp = p + Dir(k);
+            if (cell(pp).gem) return k;
+            if (dist[pp.i][pp.j] == -1) {
+                q.push(pp);
+                dist[pp.i][pp.j] = 1 + dist[p.i][p.j];
+            }
+        }
       }
     }
-    return best;
   }
 
-  Dir nextMove_danger(vector<Pos> &danger, Pos p0)
+  Dir nextMove_down(Pos p0)
   {   
     queue<Pos> q;
     q.push(p0);
@@ -69,7 +111,7 @@ struct PLAYER_NAME : public Player {
         Pos p = q.front();
         q.pop();
         if (dist[p.i][p.j] == 3) return Dir(BestMove(p0));
-        for (int k = 0; k < 8; ++k) {
+        for (int k = 0; k < 8; k = (k+2)%9) {  //check straight before corners
             Pos pp = p + Dir(k);
             if (dist[pp.i][pp.j] == -1 and cell(pp).type != Rock) {
                 q.push(pp);
@@ -78,11 +120,11 @@ struct PLAYER_NAME : public Player {
             if (cell(pp).id != 1){
                 int id = cell(pp).id;
                 if (unit(id).type != Pioneer and dist[pp.i][pp.j] < 3) {
-                  danger.push_back(p);
+                  danger.insert(p);
                   return dodge((k+4)%8, p0);
                 }
                 if (unit(id).type == Hellhound and dist[pp.i][pp.j] == 3) {
-                  danger.push_back(p);
+                  danger.insert(p);
                   return dodge((k+4)%8, p0);
                 }
             }
@@ -90,9 +132,7 @@ struct PLAYER_NAME : public Player {
     }
   }
 
-  int bfs_closestDanger(const vector<Pos> &danger, pos p0)
-  {
-    if (danger.empty()) return -1;
+  Dir nextMove_up(Pos p0) {
     queue<Pos> q;
     q.push(p0);
     VVI dist(10, vector<int>(10, -1));
@@ -100,21 +140,17 @@ struct PLAYER_NAME : public Player {
     while (not q.empty()) {
         Pos p = q.front();
         q.pop();
-        if (dist[p.i][p.j] == 3) return Dir(BestMove(p0));
-        for (int k = 0; k < 8; ++k) {
+        if (dist[p.i][p.j] == 2) return Dir(BestMove(p0));
+        for (int k = 0; k < 8; k = (k+2)%9) {
             Pos pp = p + Dir(k);
-            if (dist[pp.i][pp.j] == -1 and cell(pp).type != Rock) {
+            if (dist[pp.i][pp.j] == -1) {
                 q.push(pp);
                 dist[pp.i][pp.j] = 1 + dist[p.i][p.j];
             }
             if (cell(pp).id != 1){
                 int id = cell(pp).id;
-                if (unit(id).type != Pioneer and dist[pp.i][pp.j] < 3) {
-                  //danger.push_back(p);
-                  //return dodge((k+4)%8, p0);
-                }
-                if (unit(id).type == Hellhound and dist[pp.i][pp.j] == 3) {
-                  //danger.push_back(p);
+                if (unit(id).type == Necromonger and dist[pp.i][pp.j] < 3) {
+                  danger.insert(p);
                   return dodge((k+4)%8, p0);
                 }
             }
@@ -181,7 +217,6 @@ struct PLAYER_NAME : public Player {
 
   void move_pioneers() {
     vector<int> P = pioneers(me());
-    vector<Pos> danger;
     for (int id : P) {
       Pos p = unit(id).pos;
       /*
@@ -192,17 +227,20 @@ struct PLAYER_NAME : public Player {
       */
       if(p.k == 0) {
         if (cell(p).type == Elevator) {
-          if(get_sun_distance(unit(id).pos) > 4)
+          if(get_sun_distance(unit(id).pos) > 6)
             command(id, Up);
           else
-            command(id, nextMove_danger(danger, p));
+            command(id, nextMove_down(p));
         }
         else
-          command(id, nextMove_danger(danger, p));
+          command(id, nextMove_down(p));
       }
       else {
         if (cell(p).type == Elevator) {
-
+          if (get_sun_distance(unit(id).pos) > 6)
+            command(id, nextMove_up(p));
+          else 
+            command(id, Down);
         }
       }
     }
