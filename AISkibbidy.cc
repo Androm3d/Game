@@ -5,7 +5,7 @@
  * Write the name of your player and save this file
  * with the same name and .cc extension.
  */
-#define PLAYER_NAME SkibbidyToilet
+#define PLAYER_NAME Skibbidy
 
 
 struct PLAYER_NAME : public Player {
@@ -26,6 +26,7 @@ struct PLAYER_NAME : public Player {
 
   typedef vector<int> VI;
   typedef vector<vector<char>> VVC;
+  typedef vector<vector<bool>> VVB;
   typedef vector<vector<int>> VVI;
 
   map<int, int> kind; // For pioneers: 0 -> random, 1 -> cyclic.
@@ -53,11 +54,11 @@ struct PLAYER_NAME : public Player {
   {
     int i = 0;
     if (p.k == 0) {
-      while (cell(p+Dir((d + i)%8)).type == Rock) {
+      while (cell(p+Dir(((d + i)%8))).type == Rock or cell(p+Dir(((d + i)%8))).id != -1) {
         i*=-1;
         if (i < 1) --i;
       }
-      return Dir(d + i);
+      return Dir((d + i)%8);
     }
     else {
       if (d == 1) return RT;
@@ -70,26 +71,33 @@ struct PLAYER_NAME : public Player {
     }
   }
 
-  int BestMove(Pos p0)
+  Dir BestMove(Pos p0)
   {
     if (p0.k == 0) {
-      int max = 0;
+      int max = -1;
       int best = -1;
       for(int i = 0; i<8; ++i) {
         Cell c = cell(p0 + Dir(i));
         if (c.type != Rock and c.id == -1) {
           if (c.owner != -1) {
-            int points = nb_cells(c.owner) + (30* nb_gems(c.owner));
-            if (points >= max) {
-              best = i;
-              max = points;
+            if (c.owner == me()) {
+                if (best == -1) best = i;
             }
-            else if (best == -1) best = i;
+            else {
+              int points = nb_cells(c.owner) + (30* nb_gems(c.owner));
+              if (points >= max or best == -1) {
+                best = i;
+                max = points;
+              }
+            }
           }
-          else if (best == -1) best = i;
-        }
+          else if (best == -1 or max == -1){
+            best = i;
+            max = 0;
+          }
+        } 
       }
-      return best;
+      return Dir(best);
     }
     else {
     queue<Pos> q;
@@ -99,22 +107,22 @@ struct PLAYER_NAME : public Player {
     while (not q.empty()) {
         Pos p = q.front();
         q.pop();
-        if (dist[p.i][p.j] == 4) return 2;
+        if (dist[p.i][p.j] == 4) return Right;
         int k = 0;
         bool next = true;
         while (next) {
             Pos pp = p + Dir(k);
-            if (cell(pp).gem) return k;
+            if (cell(pp).gem) return Dir(k);
             if (dist[pp.i][pp.j] == -1) {
                 q.push(pp);
                 dist[pp.i][pp.j] = 1 + dist[p.i][p.j];
             }
             next = k != 7;
             k += 2;
-            if (k != 5) k %= 7;
+            if (k != 7) k %= 7;
         }
       }
-      return 2;
+      return Right;
     }
   }
 
@@ -122,12 +130,15 @@ struct PLAYER_NAME : public Player {
   {   
     queue<Pos> q;
     q.push(p0);
-    VVI dist(10, vector<int>(10, -1));
+    VVI dist(40, VI(80, -1));
     dist[p0.i][p0.j] = 0;
     while (not q.empty()) {
         Pos p = q.front();
         q.pop();
-        if (dist[p.i][p.j] == 3) order.push({id, 2, Dir(BestMove(p0))});
+        if (dist[p.i][p.j] == 3) {
+          order.push({id, 2, BestMove(p0)});
+          return;
+        }
         int k = 0;
         bool next = true;
         while (next) {  //check straight before corners
@@ -136,20 +147,22 @@ struct PLAYER_NAME : public Player {
                 q.push(pp);
                 dist[pp.i][pp.j] = 1 + dist[p.i][p.j];
             }
-            if (cell(pp).id != 1){
+            if (cell(pp).id != -1){
                 int id = cell(pp).id;
-                if (unit(id).type != Pioneer and dist[pp.i][pp.j] < 3) {
+                if (unit(id).type != Pioneer and unit(id).player != me() and dist[pp.i][pp.j] < 3) {
                   danger.insert(p);
-                  order.push({id, dist[pp.i][pp.j]-1, dodge((k+4)%8, p0)});
+                  order.push({id, dist[pp.i][pp.j], dodge((k+4)%8, p0)});
+                  return;
                 }
-                if (unit(id).type == Hellhound and dist[pp.i][pp.j] == 3) {
+                if (unit(id).type == Hellhound and dist[pp.i][pp.j] <= 4) {
                   danger.insert(p);
-                  order.push({id, dist[pp.i][pp.j]-1, dodge((k+4)%8, p0)});
+                  order.push({id, dist[pp.i][pp.j]-2, dodge((k+4)%8, p0)});
+                  return;
                 }
             }
             next = k != 7;
             k += 2;
-            if (k != 5) k %= 7;
+            if (k != 7) k %= 7;
         }
     }
   }
@@ -162,7 +175,10 @@ struct PLAYER_NAME : public Player {
     while (not q.empty()) {
         Pos p = q.front();
         q.pop();
-        if (dist[p.i][p.j] == 2) order.push({id, 2, Dir(BestMove(p0))});
+        if (dist[p.i][p.j] == 2) {
+          order.push({id, 2, BestMove(p0)});
+          return;
+        }
         int k = 0;
         bool next = true;
         while(next) {
@@ -176,11 +192,12 @@ struct PLAYER_NAME : public Player {
                 if (unit(id).type == Necromonger and dist[pp.i][pp.j] < 3) {
                   danger.insert(p);
                   order.push({id, 1, dodge((k+4)%8, p0)});
+                  return;
                 }
             }
             next = k != 7;
             k += 2;
-            if (k != 5) k %= 7;
+            if (k != 7) k %= 7;
         }
     }
   }
@@ -279,7 +296,6 @@ struct PLAYER_NAME : public Player {
       order.pop();
     }
   }
-
 };
 
 
