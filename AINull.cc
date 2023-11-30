@@ -22,6 +22,8 @@ struct PLAYER_NAME : public Player {
    * Types and attributes for your player can be defined here.
    */
 
+
+
   typedef vector<int> VI;
   typedef vector<vector<char>> VVC;
   typedef vector<vector<int>> VVI;
@@ -30,13 +32,22 @@ struct PLAYER_NAME : public Player {
 
   set<Pos> danger;
 
-  struct mine {
+  struct unit_move {
     int id;
     int priority;
     Dir next;
-  }
+  };
 
-  priority_queue<mine, vector<mine>, Compare> order;
+  class Compare
+  {
+  public:
+      bool operator() (unit_move a, unit_move b)
+      {
+          return a.priority < b.priority;
+      }
+  };
+
+  priority_queue<unit_move, vector<unit_move>, Compare> order;
   
   Dir dodge(int d, Pos p) 
   {
@@ -89,19 +100,25 @@ struct PLAYER_NAME : public Player {
         Pos p = q.front();
         q.pop();
         if (dist[p.i][p.j] == 4) return 2;
-        for (int k = 0; k < 8; k = (k+2)%9) {
+        int k = 0;
+        bool next = true;
+        while (next) {
             Pos pp = p + Dir(k);
             if (cell(pp).gem) return k;
             if (dist[pp.i][pp.j] == -1) {
                 q.push(pp);
                 dist[pp.i][pp.j] = 1 + dist[p.i][p.j];
             }
+            next = k != 7;
+            k += 2;
+            if (k != 5) k %= 7;
         }
       }
+      return 2;
     }
   }
 
-  Dir nextMove_down(Pos p0)
+  void nextMove_down(Pos p0, int id)
   {   
     queue<Pos> q;
     q.push(p0);
@@ -110,8 +127,10 @@ struct PLAYER_NAME : public Player {
     while (not q.empty()) {
         Pos p = q.front();
         q.pop();
-        if (dist[p.i][p.j] == 3) return Dir(BestMove(p0));
-        for (int k = 0; k < 8; k = (k+2)%9) {  //check straight before corners
+        if (dist[p.i][p.j] == 3) order.push({id, 2, Dir(BestMove(p0))});
+        int k = 0;
+        bool next = true;
+        while (next) {  //check straight before corners
             Pos pp = p + Dir(k);
             if (dist[pp.i][pp.j] == -1 and cell(pp).type != Rock) {
                 q.push(pp);
@@ -121,18 +140,21 @@ struct PLAYER_NAME : public Player {
                 int id = cell(pp).id;
                 if (unit(id).type != Pioneer and dist[pp.i][pp.j] < 3) {
                   danger.insert(p);
-                  return dodge((k+4)%8, p0);
+                  order.push({id, dist[pp.i][pp.j]-1, dodge((k+4)%8, p0)});
                 }
                 if (unit(id).type == Hellhound and dist[pp.i][pp.j] == 3) {
                   danger.insert(p);
-                  return dodge((k+4)%8, p0);
+                  order.push({id, dist[pp.i][pp.j]-1, dodge((k+4)%8, p0)});
                 }
             }
+            next = k != 7;
+            k += 2;
+            if (k != 5) k %= 7;
         }
     }
   }
 
-  Dir nextMove_up(Pos p0) {
+  void nextMove_up(Pos p0, int id) {
     queue<Pos> q;
     q.push(p0);
     VVI dist(10, vector<int>(10, -1));
@@ -140,8 +162,10 @@ struct PLAYER_NAME : public Player {
     while (not q.empty()) {
         Pos p = q.front();
         q.pop();
-        if (dist[p.i][p.j] == 2) return Dir(BestMove(p0));
-        for (int k = 0; k < 8; k = (k+2)%9) {
+        if (dist[p.i][p.j] == 2) order.push({id, 2, Dir(BestMove(p0))});
+        int k = 0;
+        bool next = true;
+        while(next) {
             Pos pp = p + Dir(k);
             if (dist[pp.i][pp.j] == -1) {
                 q.push(pp);
@@ -151,9 +175,12 @@ struct PLAYER_NAME : public Player {
                 int id = cell(pp).id;
                 if (unit(id).type == Necromonger and dist[pp.i][pp.j] < 3) {
                   danger.insert(p);
-                  return dodge((k+4)%8, p0);
+                  order.push({id, 1, dodge((k+4)%8, p0)});
                 }
             }
+            next = k != 7;
+            k += 2;
+            if (k != 5) k %= 7;
         }
     }
   }
@@ -226,22 +253,16 @@ struct PLAYER_NAME : public Player {
       else command(id, Dir(2*(round()%4)));
       */
       if(p.k == 0) {
-        if (cell(p).type == Elevator) {
-          if(get_sun_distance(unit(id).pos) > 6)
-            command(id, Up);
-          else
-            command(id, nextMove_down(p));
-        }
+        if (cell(p).type == Elevator and get_sun_distance(unit(id).pos) > 6)
+          order.push({id, 2, Up});
         else
-          command(id, nextMove_down(p));
+          nextMove_down(p, id);
       }
       else {
-        if (cell(p).type == Elevator) {
-          if (get_sun_distance(unit(id).pos) > 6)
-            command(id, nextMove_up(p));
-          else 
-            command(id, Down);
-        }
+        if (cell(p).type == Elevator and get_sun_distance(unit(id).pos) < 7) 
+          order.push({id, 2, Down});
+        else 
+          nextMove_up(p, id);
       }
     }
   }
@@ -251,6 +272,12 @@ struct PLAYER_NAME : public Player {
    * Play method, invoked once per each round.
    */
   virtual void play () {
+    move_pioneers();
+    move_furyans();
+    while(not order.empty()) {
+      command(order.top().id, order.top().next);
+      order.pop();
+    }
   }
 
 };
