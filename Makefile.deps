@@ -1,8 +1,8 @@
-Action.o: Action.cc Action.hh Structs.hh Utils.hh
 AIDemo.o: AIDemo.cc Player.hh Info.hh Settings.hh Structs.hh Utils.hh \
  State.hh Action.hh Random.hh Registry.hh
 AISkibbidy.o: AISkibbidy.cc Player.hh Info.hh Settings.hh Structs.hh \
  Utils.hh State.hh Action.hh Random.hh Registry.hh
+Action.o: Action.cc Action.hh Structs.hh Utils.hh
 Game.o: Game.cc Game.hh Player.hh Info.hh Settings.hh Structs.hh Utils.hh \
  State.hh Action.hh Random.hh Registry.hh Board.hh
 Info.o: Info.cc Info.hh Settings.hh Structs.hh Utils.hh State.hh
@@ -15,5 +15,5 @@ Registry.o: Registry.cc Registry.hh Utils.hh
 Settings.o: Settings.cc Settings.hh Structs.hh Utils.hh
 State.o: State.cc State.hh Structs.hh Utils.hh
 Structs.o: Structs.cc Structs.hh Utils.hh
-trial.o: trial.cc
 Utils.o: Utils.cc Utils.hh
+trial.o: trial.cc
